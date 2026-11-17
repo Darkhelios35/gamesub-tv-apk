@@ -1,0 +1,2 @@
+-keep class com.gamesub.tv.** { *; }
+-dontwarn fi.iki.elonen.**

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GameSub TV</string>
+    <string name="service_label">GameSub TV Canlı Altyazı Çevirici</string>
+    <string name="accessibility_service_description">Oyunlardaki İngilizce altyazıları okuyup TV ekranında Türkçe altyazı katmanı (Overlay) göstermek ve telefonunuzdan QR ile yönetmek için bu servisi aktif edin.</string>
+</resources>

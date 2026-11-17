@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GameSub TV — Mobil Kontrol Paneli</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #1e293b;
+      --border: #334155;
+      --accent: #38bdf8;
+      --primary: #0284c7;
+      --success: #059669;
+      --warn: #d97706;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 12px;
+      padding-bottom: 90px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 12px 14px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+    .header h1 { font-size: 1.1rem; color: var(--accent); }
+    .badge {
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      border-radius: 99px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      font-weight: 700;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    /* Interactive 16:9 TV Screen Mapper */
+    .tv-stage-wrapper {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 Aspect Ratio */
+      background: #020617;
+      border: 2px solid #475569;
+      border-radius: 8px;
+      overflow: hidden;
+      touch-action: none;
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    .tv-box {
+      position: absolute;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-align: center;
+      user-select: none;
+      touch-action: none;
+    }
+    #roiBox {
+      border: 2px solid #00e5ff;
+      background: rgba(0, 229, 255, 0.20);
+      color: #e0f2fe;
+      z-index: 2;
+    }
+    #ovlBox {
+      border: 2px dashed #34d399;
+      background: rgba(16, 185, 129, 0.24);
+      color: #d1fae5;
+      z-index: 3;
+    }
+    .resize-handle {
+      position: absolute;
+      right: -2px;
+      bottom: -2px;
+      width: 24px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.85);
+      color: #0f172a;
+      border-top-left-radius: 6px;
+      font-size: 12px;
+      line-height: 24px;
+      text-align: center;
+      font-weight: 900;
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #334155;
+      color: #ffffff;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      flex: 1;
+      cursor: pointer;
+    }
+    button:active { transform: scale(0.98); }
+    .btn-primary { background: var(--primary); border-color: var(--accent); }
+    .btn-success { background: var(--success); border-color: #34d399; }
+    .btn-warn { background: var(--warn); border-color: #fbbf24; }
+    label {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+    select, input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #0f172a;
+      color: #fff;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 0.9rem;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .range-row input[type="range"] { flex: 1; }
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border-top: 1px solid var(--border);
+      padding: 10px 14px;
+      display: flex;
+      gap: 10px;
+      z-index: 100;
+      backdrop-filter: blur(8px);
+    }
+    .status-log {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: #0f172a;
+      font-size: 0.82rem;
+      color: var(--accent);
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>📺 GameSub TV Kumandası</h1>
+      <div style="font-size:0.75rem; color:var(--muted);">Telefon Üzerinden Canlı TV Yönetimi</div>
+    </div>
+    <span id="connBadge" class="badge">🟢 TV Bağlı</span>
+  </div>
+
+  <!-- 1. TV Ekranı Üzerinden Dokunmatik Konum Seçici -->
+  <div class="card">
+    <div class="card-title">
+      <span>📐 1. Altyazı Okuma ve Gösterim Konumu</span>
+      <button onclick="refreshTvScreenshot()" style="flex:0; white-space:nowrap; padding:6px 10px; font-size:0.78rem;" class="btn-primary">
+        📸 TV Ekranını Getir
+      </button>
+    </div>
+    <p style="font-size:0.78rem; color:var(--muted); margin-bottom:8px;">
+      Kutuların ortasından parmağınızla sürükleyerek taşıyın, sağ alt <b>↘</b> köşesinden boyutlandırın:
+      <br><span style="color:#00e5ff;">■ Mavi Kutu:</span> Okunacak İngilizce Altyazı Bölgesi (ROI)
+      <br><span style="color:#34d399;">■ Yeşil Kutu:</span> Türkçe Altyazının TV'de Çıkacağı Konum
+    </p>
+
+    <div id="tvStage" class="tv-stage-wrapper">
+      <div id="roiBox" class="tv-box">
+        🎯 İngilizce Okuma Alanı (ROI)
+        <div class="resize-handle" data-target="roiBox">↘</div>
+      </div>
+      <div id="ovlBox" class="tv-box">
+        💬 Türkçe Altyazı Konumu
+        <div class="resize-handle" data-target="ovlBox">↘</div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button onclick="resetDefaultPositions()">🔄 Varsayılan Alt-Orta Konuma Sıfırla</button>
+      <button onclick="matchOverlayToRoi()">🔗 Türkçe Kutuyu Okuma Alanının Üstüne Hizala</button>
+    </div>
+  </div>
+
+  <!-- 2. Çeviri Motoru ve Canlı Hız Ölçümü -->
+  <div class="card">
+    <div class="card-title">⚡ 2. Çeviri Motoru ve Hız Testi (ms)</div>
+
+    <label>Çeviri Motoru (Yanlarında Hızları Yazmaktadır):</label>
+    <select id="engineSelect" onchange="onEngineSelectChange()">
+      <option value="hybrid">⚡ Google Hızlı Nöral [~55 ms] — Anahtarsız / Ücretsiz</option>
+      <option value="groq_fast">🚀 Groq AI LLaMA-3.1-8B-Instant [~70 ms] — Ücretsiz API (Ultra Hızlı)</option>
+      <option value="lingva">🌐 Lingva Açık Kaynak Nöral [~110 ms] — Anahtarsız / Ücretsiz</option>
+      <option value="groq_ai">🧠 Groq AI LLaMA-3.3-70B [~135 ms] — Ücretsiz API (En Yüksek Kalite)</option>
+      <option value="mymemory">💬 MyMemory Nöral Çeviri [~165 ms] — Anahtarsız / Ücretsiz</option>
+      <option value="gemini_ai">✨ Google Gemini 2.0 Flash AI [~190 ms] — Ücretsiz API</option>
+    </select>
+
+    <label>Ücretsiz AI API Anahtarı (Groq <code>gsk_...</code> veya Gemini <code>AIza...</code>):</label>
+    <input type="text" id="apiKeyInput" placeholder="Groq veya Gemini anahtarınızı buraya yapıştırın" oninput="onApiKeyInput()" />
+
+    <div class="btn-row">
+      <button class="btn-primary" onclick="testSingleEngineOnTv()">🧪 Seçili Motoru Test Et</button>
+      <button onclick="benchmarkAllEnginesOnTv()">🏁 Tüm Motorların Hızını Ölç</button>
+    </div>
+    <div id="benchmarkResult" class="status-log">Motor durumu hazır. Hızları ölçmek için yukarıdaki butonlara dokunun.</div>
+  </div>
+
+  <!-- 3. Altyazı Görünüm Ayarları -->
+  <div class="card">
+    <div class="card-title">🎨 3. TV Altyazı Görünümü (Font & Renk)</div>
+
+    <label>Yazı Boyutu (<span id="fontSizeVal">26</span> sp):</label>
+    <div class="range-row">
+      <input type="range" id="fontSizeRange" min="14" max="54" value="26" oninput="document.getElementById('fontSizeVal').innerText=this.value" />
+    </div>
+
+    <label>Arka Plan Kutusu Saydamlığı (<span id="bgOpacityVal">175</span> / 255):</label>
+    <div class="range-row">
+      <input type="range" id="bgOpacityRange" min="0" max="245" value="175" oninput="document.getElementById('bgOpacityVal').innerText=this.value" />
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <label>Altyazı Metin Rengi:</label>
+        <input type="color" id="textColorInput" value="#ffffff" style="width:100%; height:42px; border:none; border-radius:8px; background:#0f172a;" />
+      </div>
+      <div>
+        <label>Dış Kontur Kalınlığı (px):</label>
+        <input type="number" id="strokeWidthInput" min="0" max="10" value="4" />
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:8px;">
+      <div>
+        <label>Otomatik Gizlenme (sn):</label>
+        <input type="number" id="autoHideInput" min="2" max="30" value="6" />
+      </div>
+      <div>
+        <label>Tarama Sıklığı (ms):</label>
+        <input type="number" id="scanIntervalInput" min="180" max="1500" step="50" value="320" />
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Canlı TV Altyazı Önizlemesi -->
+  <div class="card">
+    <div class="card-title">📡 4. TV'de Okunan Son Diyalog</div>
+    <div id="liveEnText" style="font-size:0.84rem; color:var(--muted); font-style:italic;">İngilizce: Bekleniyor...</div>
+    <div id="liveTrText" style="font-size:1rem; color:var(--accent); font-weight:700; margin-top:4px;">Türkçe: Bekleniyor...</div>
+  </div>
+
+  <!-- 5. Xbox / PlayStation HDMI Kamera Köprüsü (HDCP Korumalı TV'ler İçin Yedek Mod) -->
+  <div class="card">
+    <div class="card-title">🎮 5. Xbox / HDMI Konsol Kamera Köprüsü (İsteğe Bağlı)</div>
+    <p style="font-size:0.78rem; color:var(--muted); margin-bottom:8px;">
+      Bazı Android TV'ler HDMI (Xbox) girişine geçildiğinde HDCP koruması nedeniyle dahili ekran görüntüsünü siyah verir, ancak <b>TV ekranına Türkçe altyazı basmaya devam eder</b>. Eğer TV'niz HDMI'da görüntüyü okuyamazsa bu modu açıp telefon kamerasını TV'nin altındaki altyazıya doğrultun; telefon görüntüyü TV'ye aktarır ve Türkçe altyazı yine TV ekranınızda çıkar!
+    </p>
+    <div class="btn-row">
+      <button id="btnCamBridge" onclick="toggleCameraBridge()">📷 Xbox Kamera Köprüsünü Başlat</button>
+    </div>
+    <video id="camVideo" autoplay playsinline muted style="display:none; width:100%; margin-top:8px; border-radius:8px; border:2px solid var(--accent);"></video>
+    <canvas id="camCanvas" style="display:none;"></canvas>
+  </div>
+
+  <!-- Sabit Alt Kaydet ve Başlat Çubuğu -->
+  <div class="sticky-footer">
+    <button id="btnPauseResume" class="btn-warn" onclick="toggleTvPause()" style="flex:0.8;">⏸ Duraklat</button>
+    <button onclick="stopAndHideTvOverlay()" style="flex:0.8; background:#dc2626; border-color:#f87171;">🛑 TV'de Kapat</button>
+    <button class="btn-success" onclick="saveConfigToTv()" style="flex:1.3; font-size:0.9rem;">💾 KAYDET & UYGULA</button>
+  </div>
+
+<script>
+  const stage = document.getElementById('tvStage');
+  const roiBox = document.getElementById('roiBox');
+  const ovlBox = document.getElementById('ovlBox');
+
+  // Normalized coordinates (0.0 to 1.0) so it adapts to 1080p / 4K TV screens automatically
+  let state = {
+    roiX: 0.18, roiY: 0.76, roiW: 0.64, roiH: 0.16,
+    ovlX: 0.18, ovlY: 0.78, ovlW: 0.64, ovlH: 0.14,
+    engine: 'hybrid',
+    apiKey: '',
+    fontSize: 26,
+    bgOpacity: 175,
+    textColor: '#FFFFFF',
+    strokeWidth: 4,
+    autoHideSec: 6,
+    scanIntervalMs: 320,
+    paused: false
+  };
+
+  function applyStateToBoxes() {
+    roiBox.style.left = (state.roiX * 100) + '%';
+    roiBox.style.top = (state.roiY * 100) + '%';
+    roiBox.style.width = (state.roiW * 100) + '%';
+    roiBox.style.height = (state.roiH * 100) + '%';
+
+    ovlBox.style.left = (state.ovlX * 100) + '%';
+    ovlBox.style.top = (state.ovlY * 100) + '%';
+    ovlBox.style.width = (state.ovlW * 100) + '%';
+    ovlBox.style.height = (state.ovlH * 100) + '%';
+  }
+
+  function resetDefaultPositions() {
+    state.roiX = 0.18; state.roiY = 0.75; state.roiW = 0.64; state.roiH = 0.17;
+    state.ovlX = 0.18; state.ovlY = 0.77; state.ovlW = 0.64; state.ovlH = 0.14;
+    applyStateToBoxes();
+  }
+
+  function matchOverlayToRoi() {
+    state.ovlX = state.roiX;
+    state.ovlY = state.roiY;
+    state.ovlW = state.roiW;
+    state.ovlH = state.roiH;
+    applyStateToBoxes();
+  }
+
+  // Touch & Mouse Drag/Resize for ROI and Overlay boxes
+  let activeBox = null;
+  let isResizing = false;
+  let startX = 0, startY = 0;
+  let origX = 0, origY = 0, origW = 0, origH = 0;
+
+  function onPointerDown(e, box, resizeMode) {
+    e.stopPropagation();
+    e.preventDefault();
+    activeBox = box;
+    isResizing = resizeMode;
+    const pt = e.touches ? e.touches[0] : e;
+    startX = pt.clientX;
+    startY = pt.clientY;
+    if (box === roiBox) {
+      origX = state.roiX; origY = state.roiY; origW = state.roiW; origH = state.roiH;
+    } else {
+      origX = state.ovlX; origY = state.ovlY; origW = state.ovlW; origH = state.ovlH;
+    }
+  }
+
+  function onPointerMove(e) {
+    if (!activeBox) return;
+    e.preventDefault();
+    const pt = e.touches ? e.touches[0] : e;
+    const rect = stage.getBoundingClientRect();
+    const dx = (pt.clientX - startX) / rect.width;
+    const dy = (pt.clientY - startY) / rect.height;
+
+    if (isResizing) {
+      const nw = Math.max(0.15, Math.min(1.0 - origX, origW + dx));
+      const nh = Math.max(0.06, Math.min(1.0 - origY, origH + dy));
+      if (activeBox === roiBox) { state.roiW = nw; state.roiH = nh; }
+      else { state.ovlW = nw; state.ovlH = nh; }
+    } else {
+      const nx = Math.max(0.0, Math.min(1.0 - origW, origX + dx));
+      const ny = Math.max(0.0, Math.min(1.0 - origH, origY + dy));
+      if (activeBox === roiBox) { state.roiX = nx; state.roiY = ny; }
+      else { state.ovlX = nx; state.ovlY = ny; }
+    }
+    applyStateToBoxes();
+  }
+
+  function onPointerUp() { activeBox = null; isResizing = false; }
+
+  [roiBox, ovlBox].forEach(box => {
+    box.addEventListener('mousedown', e => onPointerDown(e, box, e.target.classList.contains('resize-handle')));
+    box.addEventListener('touchstart', e => onPointerDown(e, box, e.target.classList.contains('resize-handle')), {passive: false});
+  });
+  window.addEventListener('mousemove', onPointerMove, {passive: false});
+  window.addEventListener('touchmove', onPointerMove, {passive: false});
+  window.addEventListener('mouseup', onPointerUp);
+  window.addEventListener('touchend', onPointerUp);
+
+  function onApiKeyInput() {
+    const val = document.getElementById('apiKeyInput').value.trim();
+    const sel = document.getElementById('engineSelect');
+    if (val.startsWith('gsk_') && sel.value !== 'groq_ai' && sel.value !== 'groq_fast') {
+      sel.value = 'groq_ai';
+    } else if (val.startsWith('AIza') && sel.value !== 'gemini_ai') {
+      sel.value = 'gemini_ai';
+    }
+  }
+
+  function onEngineSelectChange() {}
+
+  async function loadConfigFromTv() {
+    try {
+      const r = await fetch('/api/config');
+      const d = await r.json();
+      Object.assign(state, d);
+      applyStateToBoxes();
+      document.getElementById('engineSelect').value = state.engine || 'hybrid';
+      document.getElementById('apiKeyInput').value = state.apiKey || '';
+      document.getElementById('fontSizeRange').value = state.fontSize || 26;
+      document.getElementById('fontSizeVal').innerText = state.fontSize || 26;
+      document.getElementById('bgOpacityRange').value = state.bgOpacity ?? 175;
+      document.getElementById('bgOpacityVal').innerText = state.bgOpacity ?? 175;
+      document.getElementById('textColorInput').value = state.textColor || '#ffffff';
+      document.getElementById('strokeWidthInput').value = state.strokeWidth ?? 4;
+      document.getElementById('autoHideInput').value = state.autoHideSec ?? 6;
+      document.getElementById('scanIntervalInput').value = state.scanIntervalMs ?? 320;
+      updatePauseBtn();
+    } catch (e) {
+      document.getElementById('connBadge').innerText = '🔴 Bağlantı Yok';
+    }
+  }
+
+  function collectFormState() {
+    state.engine = document.getElementById('engineSelect').value;
+    state.apiKey = document.getElementById('apiKeyInput').value.trim();
+    state.fontSize = parseInt(document.getElementById('fontSizeRange').value, 10);
+    state.bgOpacity = parseInt(document.getElementById('bgOpacityRange').value, 10);
+    state.textColor = document.getElementById('textColorInput').value;
+    state.strokeWidth = parseInt(document.getElementById('strokeWidthInput').value, 10);
+    state.autoHideSec = parseInt(document.getElementById('autoHideInput').value, 10);
+    state.scanIntervalMs = parseInt(document.getElementById('scanIntervalInput').value, 10);
+  }
+
+  async function saveConfigToTv() {
+    collectFormState();
+    try {
+      const r = await fetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(state)
+      });
+      const res = await r.json();
+      document.getElementById('benchmarkResult').innerText = '✅ Ayarlar TV\'ye kaydedildi ve anında uygulandı!';
+    } catch (e) {
+      alert('TV ile iletişim kurulamadı: ' + e);
+    }
+  }
+
+  async function toggleTvPause() {
+    state.paused = !state.paused;
+    updatePauseBtn();
+    await saveConfigToTv();
+  }
+
+  async function stopAndHideTvOverlay() {
+    state.paused = true;
+    updatePauseBtn();
+    try {
+      await fetch('/api/stop', {method: 'POST'});
+      document.getElementById('benchmarkResult').innerText = '🛑 TV üzerindeki altyazı katmanı gizlendi ve çeviri durduruldu.';
+    } catch (e) {
+      alert('TV ile iletişim kurulamadı: ' + e);
+    }
+  }
+
+  function updatePauseBtn() {
+    const btn = document.getElementById('btnPauseResume');
+    if (state.paused) {
+      btn.innerText = '▶ Devam Et';
+      btn.className = 'btn-primary';
+    } else {
+      btn.innerText = '⏸ Duraklat';
+      btn.className = 'btn-warn';
+    }
+  }
+
+  function refreshTvScreenshot() {
+    stage.style.backgroundImage = 'url("/api/screenshot?t=' + Date.now() + '")';
+  }
+
+  async function testSingleEngineOnTv() {
+    await saveConfigToTv();
+    const eng = document.getElementById('engineSelect').value;
+    const log = document.getElementById('benchmarkResult');
+    log.innerText = '⏳ TV üzerinde ' + eng + ' motoru test ediliyor...';
+    try {
+      const r = await fetch('/api/benchmark?engine=' + encodeURIComponent(eng), {method: 'POST'});
+      const d = await r.json();
+      log.innerText = d.report || 'Test tamamlandı.';
+      if (d.speeds) updateDropdownSpeeds(d.speeds);
+    } catch (e) {
+      log.innerText = '❌ Test hatası: ' + e;
+    }
+  }
+
+  async function benchmarkAllEnginesOnTv() {
+    await saveConfigToTv();
+    const log = document.getElementById('benchmarkResult');
+    log.innerText = '⏳ TV üzerinde tüm motorların hızları (ms) ölçülüyor...';
+    try {
+      const r = await fetch('/api/benchmark?engine=all', {method: 'POST'});
+      const d = await r.json();
+      log.innerText = d.report || 'Hız ölçümü tamamlandı.';
+      if (d.speeds) updateDropdownSpeeds(d.speeds);
+    } catch (e) {
+      log.innerText = '❌ Hız ölçüm hatası: ' + e;
+    }
+  }
+
+  function updateDropdownSpeeds(speeds) {
+    const sel = document.getElementById('engineSelect');
+    const names = {
+      hybrid: '⚡ Google Hızlı Nöral',
+      groq_fast: '🚀 Groq AI LLaMA-3.1-8B-Instant',
+      lingva: '🌐 Lingva Açık Kaynak Nöral',
+      groq_ai: '🧠 Groq AI LLaMA-3.3-70B',
+      mymemory: '💬 MyMemory Nöral Çeviri',
+      gemini_ai: '✨ Google Gemini 2.0 Flash AI'
+    };
+    for (let i = 0; i < sel.options.length; i++) {
+      const code = sel.options[i].value;
+      if (speeds[code]) {
+        sel.options[i].text = names[code] + ' [' + speeds[code] + ']';
+      }
+    }
+  }
+
+  // Poll live status every 1.5s
+  let camStream = null;
+  let camInterval = null;
+
+  async function toggleCameraBridge() {
+    const video = document.getElementById('camVideo');
+    const btn = document.getElementById('btnCamBridge');
+    if (camStream) {
+      clearInterval(camInterval);
+      camStream.getTracks().forEach(t => t.stop());
+      camStream = null;
+      video.style.display = 'none';
+      btn.innerText = '📷 Xbox Kamera Köprüsünü Başlat';
+      btn.className = '';
+      return;
+    }
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      video.srcObject = camStream;
+      video.style.display = 'block';
+      btn.innerText = '⏹ Kamera Köprüsünü Durdur (Aktif)';
+      btn.className = 'btn-warn';
+
+      const canvas = document.getElementById('camCanvas');
+      const ctx = canvas.getContext('2d');
+      camInterval = setInterval(async () => {
+        if (!video.videoWidth) return;
+        // Crop center-bottom subtitle strip from camera feed
+        const cw = Math.floor(video.videoWidth * 0.8);
+        const ch = Math.floor(video.videoHeight * 0.28);
+        const cx = Math.floor((video.videoWidth - cw) / 2);
+        const cy = Math.floor(video.videoHeight * 0.36);
+        canvas.width = 640;
+        canvas.height = 180;
+        ctx.drawImage(video, cx, cy, cw, ch, 0, 0, 640, 180);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        const b64 = dataUrl.split(',')[1];
+        try {
+          await fetch('/api/ocr_frame', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({imageBase64: b64})
+          });
+        } catch (e) {}
+      }, 420);
+    } catch (e) {
+      alert('Kamera açılamadı (HTTPS veya izin gerekli olabilir): ' + e);
+    }
+  }
+
+  setInterval(async () => {
+    try {
+      const r = await fetch('/api/status');
+      const d = await r.json();
+      document.getElementById('connBadge').innerText = '🟢 TV Bağlı (' + (d.engine || 'Aktif') + ')';
+      if (d.lastEn) document.getElementById('liveEnText').innerText = 'İngilizce: ' + d.lastEn;
+      if (d.lastTr) document.getElementById('liveTrText').innerText = 'Türkçe: ' + d.lastTr;
+    } catch (e) {
+      document.getElementById('connBadge').innerText = '🔴 Bağlantı Kesildi';
+    }
+  }, 1500);
+
+  applyStateToBoxes();
+  loadConfigFromTv();
+</script>
+</body>
+</html>
