@@ -2,6 +2,8 @@ package com.gamesub.tv.server
 
 import android.content.Context
 import com.gamesub.tv.config.AppConfigManager
+import com.gamesub.tv.ocr.MlKitOcrEngine
+import com.gamesub.tv.service.GameSubDirectService
 import com.gamesub.tv.service.GameSubTvService
 import com.gamesub.tv.translate.TvTranslator
 import fi.iki.elonen.NanoHTTPD
@@ -10,8 +12,7 @@ import java.io.ByteArrayInputStream
 
 /**
  * Embedded HTTP Server running inside the Android TV app on port 8765.
- * When the user scans the QR code on the TV screen with their Android Phone,
- * this server delivers the mobile touch remote control panel and syncs all settings live.
+ * Works seamlessly with BOTH `GameSubDirectService` (Direct Mode) and `GameSubTvService` (Accessibility Mode).
  */
 class RemoteControlServer(
     private val context: Context,
@@ -38,7 +39,13 @@ class RemoteControlServer(
         }
     }
 
-    private val benchmarkTranslator = TvTranslator()
+    private val benchmarkTranslator by lazy { TvTranslator() }
+    private val fallbackOcr by lazy { MlKitOcrEngine() }
+
+    private fun pushSubtitleToActiveView(text: String) {
+        GameSubTvService.instance?.showTestSubtitle(text)
+        GameSubDirectService.instance?.showSubtitleEverywhere(text)
+    }
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri ?: "/"
@@ -58,15 +65,16 @@ class RemoteControlServer(
                     session.parseBody(bodyMap)
                     val postData = bodyMap["postData"] ?: "{}"
                     val updated = AppConfigManager.updateFromJson(postData)
-                    GameSubTvService.instance?.showTestSubtitle(
+                    pushSubtitleToActiveView(
                         "✅ Telefon Ayarları TV'ye Uygulandı! (${updated.engine})"
                     )
                     val resp = JSONObject().put("ok", true).toString()
                     newFixedLengthResponse(Response.Status.OK, "application/json", resp)
                 }
                 uri == "/api/status" -> {
+                    val isRunning = (GameSubTvService.instance != null) || (GameSubDirectService.instance != null)
                     val obj = JSONObject().apply {
-                        put("serviceRunning", GameSubTvService.instance != null)
+                        put("serviceRunning", isRunning)
                         put("engine", AppConfigManager.lastUsedEngineLabel)
                         put("lastEn", AppConfigManager.lastEnglishText)
                         put("lastTr", AppConfigManager.lastTurkishText)
@@ -88,6 +96,7 @@ class RemoteControlServer(
                 }
                 uri == "/api/stop" && method == Method.POST -> {
                     GameSubTvService.instance?.hideAndStopOverlay()
+                    GameSubDirectService.instance?.hideAndStop()
                     val resp = JSONObject().put("ok", true).put("msg", "TV Altyazı servisi durduruldu ve gizlendi.").toString()
                     newFixedLengthResponse(Response.Status.OK, "application/json", resp)
                 }
@@ -96,7 +105,17 @@ class RemoteControlServer(
                     session.parseBody(bodyMap)
                     val postData = JSONObject(bodyMap["postData"] ?: "{}")
                     val enText = postData.optString("text", "")
-                    val tr = GameSubTvService.instance?.translateAndDisplayExternalText(enText).orEmpty()
+                    val cleaned = fallbackOcr.cleanAndRepairOcrText(enText)
+                    var tr = ""
+                    if (cleaned.isNotEmpty()) {
+                        val cfg = AppConfigManager.currentConfig
+                        AppConfigManager.lastEnglishText = cleaned
+                        tr = benchmarkTranslator.translate(cleaned, cfg.engine, cfg.apiKey)
+                        if (tr.isNotBlank()) {
+                            AppConfigManager.lastTurkishText = tr
+                            pushSubtitleToActiveView(tr)
+                        }
+                    }
                     val resp = JSONObject().put("ok", true).put("tr", tr).toString()
                     newFixedLengthResponse(Response.Status.OK, "application/json", resp)
                 }
@@ -106,13 +125,29 @@ class RemoteControlServer(
                     val postData = JSONObject(bodyMap["postData"] ?: "{}")
                     val b64 = postData.optString("imageBase64", "")
                     val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
-                    val pair = kotlinx.coroutines.runBlocking {
-                        GameSubTvService.instance?.processExternalCameraFrame(bytes) ?: Pair("", "")
+                    val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    var enOut = ""
+                    var trOut = ""
+                    if (bmp != null) {
+                        val cleaned = kotlinx.coroutines.runBlocking {
+                            fallbackOcr.recognizeMultiStage(bmp)
+                        }
+                        bmp.recycle()
+                        if (cleaned.isNotEmpty()) {
+                            val cfg = AppConfigManager.currentConfig
+                            AppConfigManager.lastEnglishText = cleaned
+                            enOut = cleaned
+                            trOut = benchmarkTranslator.translate(cleaned, cfg.engine, cfg.apiKey)
+                            if (trOut.isNotBlank()) {
+                                AppConfigManager.lastTurkishText = trOut
+                                pushSubtitleToActiveView(trOut)
+                            }
+                        }
                     }
                     val resp = JSONObject().apply {
                         put("ok", true)
-                        put("en", pair.first)
-                        put("tr", pair.second)
+                        put("en", enOut)
+                        put("tr", trOut)
                     }.toString()
                     newFixedLengthResponse(Response.Status.OK, "application/json", resp)
                 }
@@ -141,7 +176,7 @@ class RemoteControlServer(
 
                     if (enginesToTest.size == 1) {
                         val firstLine = reportLines.firstOrNull().orEmpty()
-                        GameSubTvService.instance?.showTestSubtitle(firstLine)
+                        pushSubtitleToActiveView(firstLine)
                     }
 
                     val respObj = JSONObject().apply {

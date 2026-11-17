@@ -2,9 +2,10 @@ package com.gamesub.tv.service
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
-import android.graphics.ColorSpace
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
@@ -12,6 +13,7 @@ import android.view.accessibility.AccessibilityEvent
 import com.gamesub.tv.config.AppConfigManager
 import com.gamesub.tv.config.TvSubConfig
 import com.gamesub.tv.ocr.MlKitOcrEngine
+import com.gamesub.tv.server.RemoteControlServer
 import com.gamesub.tv.translate.TvTranslator
 import com.gamesub.tv.ui.TvSubtitleOverlayView
 import kotlinx.coroutines.CoroutineScope
@@ -26,14 +28,11 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
-import kotlin.math.abs
 
 /**
- * Android TV Background Accessibility & Subtitle Overlay Service.
- * - Attaches a full-screen click-through `TvSubtitleOverlayView` using `TYPE_ACCESSIBILITY_OVERLAY`
- *   (requires zero hidden "Draw Over Other Apps" permissions on Android TV!).
- * - Captures the screen silently via Android 11+ `takeScreenshot` API, crops the ROI configured
- *   from the user's phone, runs ML Kit OCR + TvTranslator, and displays the Turkish subtitle.
+ * Crash-Proof Android TV Accessibility Service.
+ * - Uses `by lazy` initialization for ML Kit so `<init>()` NEVER crashes before `attachBaseContext()`!
+ * - Attaches `TYPE_ACCESSIBILITY_OVERLAY` safely on the main Looper after a 400ms token-registration delay.
  */
 class GameSubTvService : AccessibilityService() {
 
@@ -45,6 +44,10 @@ class GameSubTvService : AccessibilityService() {
         @Volatile
         var latestScreenshotJpeg: ByteArray? = null
             private set
+
+        fun updateLatestJpeg(bytes: ByteArray) {
+            latestScreenshotJpeg = bytes
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -53,76 +56,101 @@ class GameSubTvService : AccessibilityService() {
     private var overlayView: TvSubtitleOverlayView? = null
     private val screenshotExecutor = Executors.newSingleThreadExecutor()
 
-    val ocrEngine = MlKitOcrEngine()
-    val translator = TvTranslator()
+    // IMPORTANT: Must be `by lazy` so ML Kit is NOT initialized inside <init>() before Context is attached!
+    val ocrEngine by lazy { MlKitOcrEngine() }
+    val translator by lazy { TvTranslator() }
 
     private var prevHash: Long = 0L
     private var lastTranslatedDialogue: String = ""
     private var emptyStreak: Int = 0
 
     private val configListener: (TvSubConfig) -> Unit = { newCfg ->
-        translator.clearCache()
-        lastTranslatedDialogue = ""
-        prevHash = 0L
-        overlayView?.applyConfig(newCfg)
+        try {
+            translator.clearCache()
+            lastTranslatedDialogue = ""
+            prevHash = 0L
+            overlayView?.applyConfig(newCfg)
+        } catch (_: Throwable) {
+        }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        instance = this
-        AppConfigManager.init(this)
-        com.gamesub.tv.server.RemoteControlServer.ensureStarted(this)
-        AppConfigManager.addListener(configListener)
-        setupOverlayWindow()
-        startCapturePipeline()
+        try {
+            instance = this
+            AppConfigManager.init(this)
+            RemoteControlServer.ensureStarted(this)
+            AppConfigManager.addListener(configListener)
+
+            // Wait 400ms on Main Looper so Android TV WindowManager finishes registering the Accessibility token
+            Handler(Looper.getMainLooper()).postDelayed({
+                setupOverlayWindow()
+                startCapturePipeline()
+            }, 400)
+        } catch (_: Throwable) {
+        }
     }
 
     private fun setupOverlayWindow() {
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        overlayView = TvSubtitleOverlayView(this)
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-        }
-
         try {
+            if (overlayView != null) return
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            overlayView = TvSubtitleOverlayView(this)
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+            }
+
             windowManager?.addView(overlayView, params)
             overlayView?.showSubtitle("GameSub TV Aktif — Telefonunuzdan QR kodu okutarak yönetebilirsiniz.")
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 
     fun showTestSubtitle(text: String) {
-        overlayView?.showSubtitle(text)
+        try {
+            if (text.isEmpty()) overlayView?.clearSubtitle()
+            else overlayView?.showSubtitle(text)
+        } catch (_: Throwable) {
+        }
     }
 
     fun hideAndStopOverlay() {
-        val cfg = AppConfigManager.currentConfig
-        val obj = cfg.toJson().put("paused", true)
-        AppConfigManager.updateFromJson(obj.toString())
-        overlayView?.clearSubtitle()
+        try {
+            val cfg = AppConfigManager.currentConfig
+            val obj = cfg.toJson().put("paused", true)
+            AppConfigManager.updateFromJson(obj.toString())
+            overlayView?.clearSubtitle()
+            GameSubDirectService.instance?.hideAndStop()
+        } catch (_: Throwable) {
+        }
     }
 
     fun translateAndDisplayExternalText(rawEnglish: String): String {
-        val cleaned = ocrEngine.cleanAndRepairOcrText(rawEnglish)
-        if (cleaned.isEmpty()) return ""
-        val cfg = AppConfigManager.currentConfig
-        AppConfigManager.lastEnglishText = cleaned
-        val tr = translator.translate(cleaned, cfg.engine, cfg.apiKey)
-        if (tr.isNotBlank()) {
-            AppConfigManager.lastTurkishText = tr
-            overlayView?.showSubtitle(tr)
+        return try {
+            val cleaned = ocrEngine.cleanAndRepairOcrText(rawEnglish)
+            if (cleaned.isEmpty()) return ""
+            val cfg = AppConfigManager.currentConfig
+            AppConfigManager.lastEnglishText = cleaned
+            val tr = translator.translate(cleaned, cfg.engine, cfg.apiKey)
+            if (tr.isNotBlank()) {
+                AppConfigManager.lastTurkishText = tr
+                overlayView?.showSubtitle(tr)
+                GameSubDirectService.instance?.showSubtitleEverywhere(tr)
+            }
+            tr
+        } catch (_: Throwable) {
+            ""
         }
-        return tr
     }
 
     suspend fun processExternalCameraFrame(jpegBytes: ByteArray): Pair<String, String> {
@@ -141,10 +169,13 @@ class GameSubTvService : AccessibilityService() {
                     if (tr.isNotBlank()) {
                         AppConfigManager.lastTurkishText = tr
                         overlayView?.showSubtitle(tr)
+                        GameSubDirectService.instance?.showSubtitleEverywhere(tr)
                     }
                 }
                 Pair(AppConfigManager.lastEnglishText, AppConfigManager.lastTurkishText)
             }
+        } catch (_: Throwable) {
+            Pair("", "")
         } finally {
             bmp.recycle()
         }
@@ -155,24 +186,22 @@ class GameSubTvService : AccessibilityService() {
         pipelineJob = serviceScope.launch {
             while (isActive) {
                 val cfg = AppConfigManager.currentConfig
-                if (cfg.paused) {
-                    delay(250)
+                // If Direct MediaProjection service is already running, let it handle screen capture
+                if (cfg.paused || GameSubDirectService.instance != null) {
+                    delay(300)
                     continue
                 }
 
                 val t0 = System.currentTimeMillis()
                 val fullBitmap = captureTvScreen()
                 if (fullBitmap != null) {
-                    // Save a compressed JPEG snapshot for the Phone's "TV Ekranını Getir" feature
                     updatePhonePreviewJpeg(fullBitmap)
 
-                    // Crop the ROI region selected on the phone
                     val rx = (fullBitmap.width * cfg.roiX).toInt().coerceIn(0, fullBitmap.width - 32)
                     val ry = (fullBitmap.height * cfg.roiY).toInt().coerceIn(0, fullBitmap.height - 24)
                     val rw = (fullBitmap.width * cfg.roiW).toInt().coerceIn(32, fullBitmap.width - rx)
                     val rh = (fullBitmap.height * cfg.roiH).toInt().coerceIn(24, fullBitmap.height - ry)
 
-                    // Avoid reading our own Turkish overlay if ROI and Overlay overlap vertically
                     val roiBitmap = Bitmap.createBitmap(fullBitmap, rx, ry, rw, rh)
                     fullBitmap.recycle()
 
@@ -190,7 +219,6 @@ class GameSubTvService : AccessibilityService() {
                             }
                         } else {
                             emptyStreak = 0
-                            // Ignore if OCR accidentally read our own Turkish translation
                             if (!translator.isSameDialogue(cleanedText, lastTranslatedDialogue) &&
                                 !translator.isSameDialogue(cleanedText, AppConfigManager.lastTurkishText)
                             ) {
@@ -209,7 +237,7 @@ class GameSubTvService : AccessibilityService() {
                 }
 
                 val elapsed = System.currentTimeMillis() - t0
-                val waitMs = (cfg.scanIntervalMs - elapsed).coerceAtLeast(120L)
+                val waitMs = (cfg.scanIntervalMs - elapsed).coerceAtLeast(150L)
                 delay(waitMs)
             }
         }
@@ -222,7 +250,7 @@ class GameSubTvService : AccessibilityService() {
             scaled.compress(Bitmap.CompressFormat.JPEG, 68, bos)
             latestScreenshotJpeg = bos.toByteArray()
             scaled.recycle()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 
@@ -256,7 +284,7 @@ class GameSubTvService : AccessibilityService() {
                                 hwBmp?.recycle()
                                 hwBuffer.close()
                                 if (cont.isActive) cont.resume(softBmp)
-                            } catch (_: Exception) {
+                            } catch (_: Throwable) {
                                 if (cont.isActive) cont.resume(null)
                             }
                         }
@@ -266,7 +294,7 @@ class GameSubTvService : AccessibilityService() {
                         }
                     }
                 )
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
                 if (cont.isActive) cont.resume(null)
             }
         } else {
@@ -286,7 +314,7 @@ class GameSubTvService : AccessibilityService() {
         overlayView?.let {
             try {
                 windowManager?.removeView(it)
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
             }
         }
         super.onDestroy()

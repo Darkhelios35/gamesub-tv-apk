@@ -10,9 +10,10 @@ android {
     defaultConfig {
         applicationId = "com.gamesub.tv"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // targetSdk 31 avoids Android 13/14 "Restricted Settings" block on sideloaded APKs!
+        targetSdk = 31
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
