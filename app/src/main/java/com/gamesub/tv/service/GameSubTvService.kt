@@ -228,7 +228,11 @@ class GameSubTvService : AccessibilityService() {
                                 val tr = translator.translate(cleanedText, cfg.engine, cfg.apiKey)
                                 if (tr.isNotBlank()) {
                                     AppConfigManager.lastTurkishText = tr
-                                    overlayView?.showSubtitle(tr)
+                                    if (cfg.forwardToTvIp.isNotBlank()) {
+                                        translator.forwardTurkishSubtitleToTv(cfg.forwardToTvIp, cleanedText, tr)
+                                    } else {
+                                        overlayView?.showSubtitle(tr)
+                                    }
                                 }
                             }
                         }

@@ -22,7 +22,8 @@ data class TvSubConfig(
     var strokeWidth: Int = 4,
     var autoHideSec: Int = 6,
     var scanIntervalMs: Int = 320,
-    var paused: Boolean = false
+    var paused: Boolean = false,
+    var forwardToTvIp: String = ""
 ) {
     fun toJson(): JSONObject {
         return JSONObject().apply {
@@ -43,6 +44,7 @@ data class TvSubConfig(
             put("autoHideSec", autoHideSec)
             put("scanIntervalMs", scanIntervalMs)
             put("paused", paused)
+            put("forwardToTvIp", forwardToTvIp)
         }
     }
 
@@ -65,7 +67,8 @@ data class TvSubConfig(
                 strokeWidth = obj.optInt("strokeWidth", 4).coerceIn(0, 12),
                 autoHideSec = obj.optInt("autoHideSec", 6).coerceIn(2, 30),
                 scanIntervalMs = obj.optInt("scanIntervalMs", 320).coerceIn(150, 2000),
-                paused = obj.optBoolean("paused", false)
+                paused = obj.optBoolean("paused", false),
+                forwardToTvIp = obj.optString("forwardToTvIp", "").trim()
             )
         }
     }

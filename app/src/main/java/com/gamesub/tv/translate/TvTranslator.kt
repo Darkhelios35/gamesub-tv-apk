@@ -125,6 +125,24 @@ class TvTranslator {
         return result
     }
 
+    fun forwardTurkishSubtitleToTv(tvIp: String, englishText: String, turkishText: String) {
+        val cleanIp = tvIp.trim().removePrefix("http://").removePrefix("https://").substringBefore("/")
+        if (cleanIp.isEmpty() || turkishText.isBlank()) return
+        val hostPort = if (cleanIp.contains(":")) cleanIp else "$cleanIp:8765"
+        try {
+            val payload = JSONObject().apply {
+                put("en", englishText)
+                put("tr", turkishText)
+            }
+            val req = Request.Builder()
+                .url("http://$hostPort/api/display_tr")
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            httpClient.newCall(req).execute().close()
+        } catch (_: Exception) {
+        }
+    }
+
     fun translateGoogleFast(text: String): String {
         val q = URLEncoder.encode(text, "UTF-8")
         // 1. Primary GTX JSON endpoint

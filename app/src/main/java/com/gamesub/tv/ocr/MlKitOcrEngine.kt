@@ -108,6 +108,14 @@ class MlKitOcrEngine {
         text = text.replace(Regex("[^A-Za-z0-9\"'\\]\\)\\.\\!\\?\\,\\-\\:;]+$"), "")
         if (text.length < 2) return ""
 
+        // Ignore our own app UI or already-Turkish TV menu texts
+        val ignoreRegex = Regex(
+            "(GameSub|Hemen Başlat|Doğrudan Mod|Erişilebilirlik|Altyazı|Çeviri|Telefon|Okutun|http://|192\\.168\\.)",
+            RegexOption.IGNORE_CASE
+        )
+        if (ignoreRegex.containsMatchIn(text)) return ""
+        if (text.any { it in "ğĞşŞıİ" }) return ""
+
         // Keep valid English words (including 1-letter "I", "a", "o" and short 1-4 word lines)
         val words = text.split(" ")
         val validWords = mutableListOf<String>()

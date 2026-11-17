@@ -241,7 +241,12 @@ class GameSubDirectService : Service() {
                                 val tr = translator.translate(cleanedText, cfg.engine, cfg.apiKey)
                                 if (tr.isNotBlank()) {
                                     AppConfigManager.lastTurkishText = tr
-                                    showSubtitleEverywhere(tr)
+                                    if (cfg.forwardToTvIp.isNotBlank()) {
+                                        // If running on Phone reading Xbox Remote Play, beam Turkish subtitle to TV!
+                                        translator.forwardTurkishSubtitleToTv(cfg.forwardToTvIp, cleanedText, tr)
+                                    } else {
+                                        showSubtitleEverywhere(tr)
+                                    }
                                 }
                             }
                         }

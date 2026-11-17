@@ -100,6 +100,20 @@ class RemoteControlServer(
                     val resp = JSONObject().put("ok", true).put("msg", "TV Altyazı servisi durduruldu ve gizlendi.").toString()
                     newFixedLengthResponse(Response.Status.OK, "application/json", resp)
                 }
+                uri == "/api/display_tr" && method == Method.POST -> {
+                    val bodyMap = HashMap<String, String>()
+                    session.parseBody(bodyMap)
+                    val postData = JSONObject(bodyMap["postData"] ?: "{}")
+                    val en = postData.optString("en", "")
+                    val tr = postData.optString("tr", "")
+                    if (tr.isNotBlank()) {
+                        AppConfigManager.lastEnglishText = en
+                        AppConfigManager.lastTurkishText = tr
+                        pushSubtitleToActiveView(tr)
+                    }
+                    val resp = JSONObject().put("ok", true).toString()
+                    newFixedLengthResponse(Response.Status.OK, "application/json", resp)
+                }
                 uri == "/api/push_text" && method == Method.POST -> {
                     val bodyMap = HashMap<String, String>()
                     session.parseBody(bodyMap)
