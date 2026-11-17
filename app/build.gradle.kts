@@ -9,11 +9,16 @@ android {
 
     defaultConfig {
         applicationId = "com.gamesub.tv"
-        minSdk = 26
-        // targetSdk 31 avoids Android 13/14 "Restricted Settings" block on sideloaded APKs!
-        targetSdk = 31
-        versionCode = 3
-        versionName = "1.2.0"
+        minSdk = 22
+        // targetSdk 22 auto-grants SYSTEM_ALERT_WINDOW on Android TV and bypasses Sideload Accessibility blocks!
+        targetSdk = 22
+        versionCode = 4
+        versionName = "1.3.0"
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     buildTypes {

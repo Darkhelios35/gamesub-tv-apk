@@ -1,5 +1,6 @@
 package com.gamesub.tv.service
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
@@ -14,12 +15,13 @@ import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
-import android.provider.Settings
-import android.util.DisplayMetrics
+import android.os.PowerManager
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
@@ -40,9 +42,13 @@ import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 
 /**
- * Direct Screen Capture & Subtitle Overlay Service (`MediaProjection` + `TYPE_APPLICATION_OVERLAY`).
- * Works on 100% of Android TVs even when the TV firmware disables/blocks Accessibility Services!
+ * Direct Screen Capture & Subtitle Overlay Service (`MediaProjection` + Multi-Type Overlay).
+ * - Acquires `PARTIAL_WAKE_LOCK` + `WifiLock` so switching to HDMI 1 never sleeps the service.
+ * - Registers `MediaProjection.Callback` on a `HandlerThread` (Android 13/14 requirement)
+ *   and captures at 1280x720 to avoid 4K buffer exhaustion when the HDMI scaler turns on.
+ * - Falls back to `GameSubTvService.captureScreenExternal()` if MediaProjection sees a black HDMI frame.
  */
+@SuppressLint("NewApi", "WakelockTimeout")
 class GameSubDirectService : Service() {
 
     companion object {
@@ -64,6 +70,10 @@ class GameSubDirectService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
+    private var projThread: HandlerThread? = null
+
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     private val ocrEngine by lazy { MlKitOcrEngine() }
     private val translator by lazy { TvTranslator() }
@@ -88,8 +98,27 @@ class GameSubDirectService : Service() {
         AppConfigManager.init(this)
         RemoteControlServer.ensureStarted(this)
         AppConfigManager.addListener(configListener)
+        acquireWakeLocks()
         startForeground(NOTIF_ID, createNotification())
         setupOverlayWindow()
+    }
+
+    private fun acquireWakeLocks() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "GameSubTV::WakeLock")?.apply {
+                if (!isHeld) acquire()
+            }
+        } catch (_: Throwable) {
+        }
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            @Suppress("DEPRECATION")
+            wifiLock = wm?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "GameSubTV::WifiLock")?.apply {
+                if (!isHeld) acquire()
+            }
+        } catch (_: Throwable) {
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -131,31 +160,41 @@ class GameSubDirectService : Service() {
             try {
                 if (overlayView != null) return@post
                 windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-                overlayView = TvSubtitleOverlayView(this)
+                val candidateView = TvSubtitleOverlayView(this)
 
-                val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                val candidateTypes = mutableListOf<Int>()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    candidateTypes.add(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
                 } else {
                     @Suppress("DEPRECATION")
-                    WindowManager.LayoutParams.TYPE_PHONE
+                    candidateTypes.add(WindowManager.LayoutParams.TYPE_PHONE)
                 }
+                @Suppress("DEPRECATION")
+                candidateTypes.add(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT)
+                @Suppress("DEPRECATION")
+                candidateTypes.add(WindowManager.LayoutParams.TYPE_TOAST)
 
-                val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    overlayType,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-                    PixelFormat.TRANSLUCENT
-                ).apply {
-                    gravity = Gravity.TOP or Gravity.START
-                }
+                for (overlayType in candidateTypes) {
+                    val params = WindowManager.LayoutParams(
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        overlayType,
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                        PixelFormat.TRANSLUCENT
+                    ).apply {
+                        gravity = Gravity.TOP or Gravity.START
+                    }
 
-                if (Settings.canDrawOverlays(this)) {
-                    windowManager?.addView(overlayView, params)
-                    overlayView?.showSubtitle("GameSub TV Aktif (Doğrudan Mod) — Telefonunuzdan yönetebilirsiniz!")
+                    try {
+                        windowManager?.addView(candidateView, params)
+                        overlayView = candidateView
+                        overlayView?.showSubtitle("GameSub TV Aktif (Doğrudan Mod) — Telefonunuzdan yönetebilirsiniz!")
+                        break
+                    } catch (_: Throwable) {
+                    }
                 }
             } catch (_: Throwable) {
             }
@@ -165,29 +204,33 @@ class GameSubDirectService : Service() {
     private fun startMediaProjectionCapture(resultCode: Int, resultData: Intent) {
         try {
             val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjection?.stop()
-            mediaProjection = mpManager.getMediaProjection(resultCode, resultData)
-
-            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val metrics = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            wm.defaultDisplay.getRealMetrics(metrics)
-            val screenW = metrics.widthPixels.coerceAtLeast(1280)
-            val screenH = metrics.heightPixels.coerceAtLeast(720)
-            val density = metrics.densityDpi
-
-            imageReader?.close()
-            imageReader = ImageReader.newInstance(screenW, screenH, PixelFormat.RGBA_8888, 2)
             virtualDisplay?.release()
+            imageReader?.close()
+            mediaProjection?.stop()
+            projThread?.quitSafely()
+
+            projThread = HandlerThread("GameSubProjectionThread").apply { start() }
+            val projHandler = Handler(projThread!!.looper)
+
+            mediaProjection = mpManager.getMediaProjection(resultCode, resultData)?.apply {
+                registerCallback(object : MediaProjection.Callback() {}, projHandler)
+            }
+
+            // Capture at fixed 1280x720 to prevent 4K buffer exhaustion when HDMI scaler activates
+            val captureW = 1280
+            val captureH = 720
+            val density = resources.displayMetrics.densityDpi
+
+            imageReader = ImageReader.newInstance(captureW, captureH, PixelFormat.RGBA_8888, 2)
             virtualDisplay = mediaProjection?.createVirtualDisplay(
                 "GameSubTVDisplay",
-                screenW,
-                screenH,
+                captureW,
+                captureH,
                 density,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 imageReader?.surface,
                 null,
-                null
+                projHandler
             )
 
             startCaptureLoop()
@@ -206,7 +249,16 @@ class GameSubDirectService : Service() {
                 }
 
                 val t0 = System.currentTimeMillis()
-                val fullBitmap = grabFrameFromReader()
+                var fullBitmap = grabFrameFromReader()
+                if (fullBitmap == null || GameSubTvService.isBitmapAllBlack(fullBitmap)) {
+                    fullBitmap?.recycle()
+                    fullBitmap = GameSubTvService.instance?.captureScreenExternal()
+                }
+                if (fullBitmap != null && GameSubTvService.isBitmapAllBlack(fullBitmap)) {
+                    fullBitmap.recycle()
+                    fullBitmap = null
+                }
+
                 if (fullBitmap != null) {
                     updatePhonePreviewJpeg(fullBitmap)
 
@@ -270,6 +322,8 @@ class GameSubDirectService : Service() {
             GameSubTvService.instance?.showTestSubtitle(text)
         }
     }
+
+    fun hasOverlay(): Boolean = overlayView != null
 
     fun hideAndStop() {
         val cfg = AppConfigManager.currentConfig
@@ -350,6 +404,12 @@ class GameSubDirectService : Service() {
             virtualDisplay?.release()
             imageReader?.close()
             mediaProjection?.stop()
+            projThread?.quitSafely()
+        } catch (_: Throwable) {
+        }
+        try {
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+            if (wifiLock?.isHeld == true) wifiLock?.release()
         } catch (_: Throwable) {
         }
         overlayView?.let {

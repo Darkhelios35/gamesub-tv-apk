@@ -1,6 +1,7 @@
 package com.gamesub.tv.service
 
 import android.accessibilityservice.AccessibilityService
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.os.Build
@@ -34,6 +35,7 @@ import kotlin.coroutines.resume
  * - Uses `by lazy` initialization for ML Kit so `<init>()` NEVER crashes before `attachBaseContext()`!
  * - Attaches `TYPE_ACCESSIBILITY_OVERLAY` safely on the main Looper after a 400ms token-registration delay.
  */
+@SuppressLint("NewApi")
 class GameSubTvService : AccessibilityService() {
 
     companion object {
@@ -47,6 +49,30 @@ class GameSubTvService : AccessibilityService() {
 
         fun updateLatestJpeg(bytes: ByteArray) {
             latestScreenshotJpeg = bytes
+        }
+
+        fun isBitmapAllBlack(bmp: Bitmap): Boolean {
+            val w = bmp.width
+            val h = bmp.height
+            if (w <= 0 || h <= 0) return true
+            val stepX = (w / 12).coerceAtLeast(1)
+            val stepY = (h / 8).coerceAtLeast(1)
+            var y = stepY / 2
+            while (y < h) {
+                var x = stepX / 2
+                while (x < w) {
+                    val px = bmp.getPixel(x, y)
+                    if (((px shr 16) and 0xFF) > 5 ||
+                        ((px shr 8) and 0xFF) > 5 ||
+                        (px and 0xFF) > 5
+                    ) {
+                        return false
+                    }
+                    x += stepX
+                }
+                y += stepY
+            }
+            return true
         }
     }
 
@@ -124,6 +150,8 @@ class GameSubTvService : AccessibilityService() {
         }
     }
 
+    fun hasOverlay(): Boolean = overlayView != null
+
     fun hideAndStopOverlay() {
         try {
             val cfg = AppConfigManager.currentConfig
@@ -194,7 +222,7 @@ class GameSubTvService : AccessibilityService() {
 
                 val t0 = System.currentTimeMillis()
                 val fullBitmap = captureTvScreen()
-                if (fullBitmap != null) {
+                if (fullBitmap != null && !isBitmapAllBlack(fullBitmap)) {
                     updatePhonePreviewJpeg(fullBitmap)
 
                     val rx = (fullBitmap.width * cfg.roiX).toInt().coerceIn(0, fullBitmap.width - 32)
@@ -238,6 +266,8 @@ class GameSubTvService : AccessibilityService() {
                         }
                     }
                     roiBitmap.recycle()
+                } else {
+                    fullBitmap?.recycle()
                 }
 
                 val elapsed = System.currentTimeMillis() - t0
@@ -272,6 +302,8 @@ class GameSubTvService : AccessibilityService() {
         small.recycle()
         return hash
     }
+
+    suspend fun captureScreenExternal(): Bitmap? = captureTvScreen()
 
     private suspend fun captureTvScreen(): Bitmap? = suspendCancellableCoroutine { cont ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

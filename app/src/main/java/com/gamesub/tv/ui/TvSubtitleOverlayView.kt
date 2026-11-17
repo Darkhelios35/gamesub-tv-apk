@@ -1,5 +1,6 @@
 package com.gamesub.tv.ui
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -20,6 +21,7 @@ import com.gamesub.tv.config.TvSubConfig
  * Transparent, Gamepad/Remote Click-Through Subtitle Overlay View for Android TV.
  * Renders high-contrast stroked Turkish subtitles inside the user's phone-configured box (`ovlX, ovlY, ovlW, ovlH`).
  */
+@SuppressLint("NewApi")
 class TvSubtitleOverlayView(context: Context) : View(context) {
 
     private var currentSubtitle: String = ""

@@ -1,190 +1,215 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootFrame"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0B0F19"
-    android:gravity="center"
-    android:orientation="horizontal"
-    android:padding="36dp">
+    android:background="#0B0F19">
 
-    <!-- Sol Panel: Başlık, Durum ve Kumanda Butonları -->
-    <LinearLayout
-        android:layout_width="0dp"
+    <!-- Tam Ekran Dahili HDMI (Xbox) Görüntü Katmanı -->
+    <android.media.tv.TvView
+        android:id="@+id/hdmiTvView"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_weight="1.25"
-        android:gravity="center_vertical"
-        android:orientation="vertical"
-        android:paddingEnd="28dp">
+        android:visibility="gone" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🎮 GameSub TV — Canlı Oyun Çevirici"
-            android:textColor="#38BDF8"
-            android:textSize="28sp"
-            android:textStyle="bold" />
+    <!-- Ana QR & Durum Kontrol Ekranı -->
+    <LinearLayout
+        android:id="@+id/dashboardContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0B0F19"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="36dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Tüm altyazı konumu, boyut, renk ve çeviri motoru ayarlarını sağdaki QR kodu Android telefonunuzla okutarak telefon ekranınızdan yapabilirsiniz."
-            android:textColor="#94A3B8"
-            android:textSize="15sp" />
-
-        <!-- Servis ve Telefon Eşleşme Durum Kutusu -->
+        <!-- Sol Panel: Başlık, Durum ve Kumanda Butonları -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:background="#1E293B"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1.25"
+            android:gravity="center_vertical"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:paddingEnd="28dp">
 
             <TextView
-                android:id="@+id/tvServiceStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="⚠️ 1. Adım: Erişilebilirlik Servisi Kapalı (Aşağıdan Açın)"
-                android:textColor="#FBBF24"
-                android:textSize="16sp"
+                android:text="🎮 GameSub TV — Canlı Oyun Çevirici"
+                android:textColor="#38BDF8"
+                android:textSize="28sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvPhoneStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="📱 2. Adım: Telefon Bağlantısı Bekleniyor..."
-                android:textColor="#E2E8F0"
+                android:text="Tüm altyazı konumu, boyut, renk ve çeviri motoru ayarlarını sağdaki QR kodu Android telefonunuzla okutarak telefon ekranınızdan yapabilirsiniz."
+                android:textColor="#94A3B8"
                 android:textSize="15sp" />
+
+            <!-- Servis ve Telefon Eşleşme Durum Kutusu -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:background="#1E293B"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:id="@+id/tvServiceStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⚠️ 1. Adım: TV Servisi Hazır (Aşağıdan Başlatın)"
+                    android:textColor="#FBBF24"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvPhoneStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="📱 2. Adım: Telefon Bağlantısı Bekleniyor..."
+                    android:textColor="#E2E8F0"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:id="@+id/tvEngineStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="⚡ Aktif Motor: Google Hızlı Nöral [~55 ms]"
+                    android:textColor="#38BDF8"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- TV Kumandası (D-Pad) ile Tıklanabilir Butonlar -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnEnableAccessibility"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_marginEnd="12dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#0284C7"
+                    android:focusable="true"
+                    android:nextFocusRight="@+id/btnToggleCapture"
+                    android:text="⚙️ Erişilebilirlik İzni"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnToggleCapture"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_marginEnd="12dp"
+                    android:layout_weight="1.15"
+                    android:backgroundTint="#059669"
+                    android:focusable="true"
+                    android:nextFocusLeft="@+id/btnEnableAccessibility"
+                    android:nextFocusRight="@+id/btnTestOverlay"
+                    android:text="▶ 1. Hemen Başlat (Doğrudan Mod)"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnTestOverlay"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#334155"
+                    android:focusable="true"
+                    android:nextFocusLeft="@+id/btnToggleCapture"
+                    android:text="📺 HDMI (Xbox) TV İçinde Aç / Test"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/tvEngineStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="⚡ Aktif Motor: Google Hızlı Nöral [~55 ms]"
-                android:textColor="#38BDF8"
-                android:textSize="14sp" />
+                android:layout_marginTop="14dp"
+                android:text="💡 İpucu: Önce yeşil 'Hemen Başlat'a basın, ardından 'HDMI (Xbox) TV İçinde Aç'ı deneyebilir veya kumandadan HDMI kaynağına geçebilirsiniz."
+                android:textColor="#64748B"
+                android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- TV Kumandası (D-Pad) ile Tıklanabilir Butonlar -->
+        <!-- Sağ Panel: Büyük QR Kod Kartı -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:orientation="horizontal">
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="0.85"
+            android:background="#1E293B"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp">
 
-            <Button
-                android:id="@+id/btnEnableAccessibility"
-                android:layout_width="0dp"
-                android:layout_height="54dp"
-                android:layout_marginEnd="12dp"
-                android:layout_weight="1"
-                android:backgroundTint="#0284C7"
-                android:focusable="true"
-                android:nextFocusRight="@+id/btnToggleCapture"
-                android:text="1. TV Servis İznini Aç"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="15sp"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📱 TELEFON İLE OKUTUN"
+                android:textColor="#38BDF8"
+                android:textSize="20sp"
                 android:textStyle="bold" />
 
-            <Button
-                android:id="@+id/btnToggleCapture"
-                android:layout_width="0dp"
-                android:layout_height="54dp"
-                android:layout_marginEnd="12dp"
-                android:layout_weight="1"
-                android:backgroundTint="#059669"
-                android:focusable="true"
-                android:nextFocusLeft="@+id/btnEnableAccessibility"
-                android:nextFocusRight="@+id/btnTestOverlay"
-                android:text="▶ Çeviriyi Başlat / Duraklat"
-                android:textAllCaps="false"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="14dp"
+                android:gravity="center"
+                android:text="Telefon kameranızla QR kodu okutarak Kontrol Paneline bağlanın"
+                android:textColor="#CBD5E1"
+                android:textSize="13sp" />
+
+            <ImageView
+                android:id="@+id/ivQrCode"
+                android:layout_width="240dp"
+                android:layout_height="240dp"
+                android:background="#FFFFFF"
+                android:contentDescription="QR Code"
+                android:padding="10dp"
+                android:scaleType="fitCenter" />
+
+            <TextView
+                android:id="@+id/tvServerUrl"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="http://192.168.1.X:8765"
                 android:textColor="#FFFFFF"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textStyle="bold" />
 
-            <Button
-                android:id="@+id/btnTestOverlay"
-                android:layout_width="0dp"
-                android:layout_height="54dp"
-                android:layout_weight="0.8"
-                android:backgroundTint="#334155"
-                android:focusable="true"
-                android:nextFocusLeft="@+id/btnToggleCapture"
-                android:text="🔍 Altyazı Test"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="15sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:text="(TV ve Telefon aynı Wi-Fi ağında olmalıdır)"
+                android:textColor="#94A3B8"
+                android:textSize="12sp" />
         </LinearLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="💡 İpucu: Servisi açtıktan sonra bu uygulamayı arka plana atıp oyununuzu açabilirsiniz. Telefonunuzdan yaptığınız her ayar anında TV ekranına yansır."
-            android:textColor="#64748B"
-            android:textSize="13sp" />
     </LinearLayout>
 
-    <!-- Sağ Panel: Büyük QR Kod Kartı -->
-    <LinearLayout
-        android:layout_width="0dp"
+    <!-- Uygulama İçi HDMI Modu İçin Altyazı Katmanı -->
+    <FrameLayout
+        android:id="@+id/inAppOverlayContainer"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_weight="0.85"
-        android:background="#1E293B"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:clickable="false"
+        android:focusable="false" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="📱 TELEFON İLE OKUTUN"
-            android:textColor="#38BDF8"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:layout_marginBottom="14dp"
-            android:gravity="center"
-            android:text="Telefon kameranızla QR kodu okutarak Kontrol Paneline bağlanın"
-            android:textColor="#CBD5E1"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/ivQrCode"
-            android:layout_width="240dp"
-            android:layout_height="240dp"
-            android:background="#FFFFFF"
-            android:contentDescription="QR Code"
-            android:padding="10dp"
-            android:scaleType="fitCenter" />
-
-        <TextView
-            android:id="@+id/tvServerUrl"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="http://192.168.1.X:8765"
-            android:textColor="#FFFFFF"
-            android:textSize="17sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:text="(TV ve Telefon aynı Wi-Fi ağında olmalıdır)"
-            android:textColor="#94A3B8"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-</LinearLayout>
+</FrameLayout>
